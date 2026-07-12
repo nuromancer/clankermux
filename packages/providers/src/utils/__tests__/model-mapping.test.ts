@@ -163,6 +163,85 @@ describe("transformRequestBodyModel", () => {
 		expect(resultBody.messages).toEqual([{ role: "user", content: "test" }]);
 		expect(resultBody.model).toBeUndefined();
 	});
+
+	it("rebuilds the body when mutateBody returns true even if the model is unchanged", async () => {
+		const requestBody = {
+			model: "claude-opus-4-8",
+			messages: [{ role: "user", content: "test" }],
+		};
+
+		const request = new Request("http://test.com", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(requestBody),
+		});
+
+		const result = await transformRequestBodyModel(
+			request,
+			undefined,
+			undefined,
+			(body) => {
+				body.output_config = { effort: "max" };
+				return true;
+			},
+		);
+		const resultBody = await result.json();
+
+		expect(resultBody.model).toBe("claude-opus-4-8");
+		expect(resultBody.output_config).toEqual({ effort: "max" });
+	});
+
+	it("forwards the original body untouched when mutateBody returns false and the model is unchanged", async () => {
+		const requestBody = {
+			model: "claude-opus-4-8",
+			messages: [{ role: "user", content: "test" }],
+		};
+
+		const request = new Request("http://test.com", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(requestBody),
+		});
+
+		const result = await transformRequestBodyModel(
+			request,
+			undefined,
+			undefined,
+			() => false,
+		);
+		const resultBody = await result.json();
+
+		expect(resultBody.model).toBe("claude-opus-4-8");
+		expect(resultBody.output_config).toBeUndefined();
+	});
+
+	it("runs mutateBody after model mapping so it sees the mapped model", async () => {
+		const requestBody = {
+			model: "claude-opus-4-8",
+			messages: [{ role: "user", content: "test" }],
+		};
+
+		const request = new Request("http://test.com", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(requestBody),
+		});
+
+		let seenModel: string | undefined;
+		const result = await transformRequestBodyModel(
+			request,
+			undefined,
+			(model) => `mapped-${model}`,
+			(body) => {
+				seenModel = body.model;
+				return false;
+			},
+		);
+		const resultBody = await result.json();
+
+		expect(seenModel).toBe("mapped-claude-opus-4-8");
+		expect(resultBody.model).toBe("mapped-claude-opus-4-8");
+	});
 });
 
 describe("transformRequestBodyModelForce", () => {

@@ -31,6 +31,7 @@ export interface TransformRequestBody {
 		name?: string;
 	} | null;
 	system?: string;
+	output_config?: { effort?: string; [key: string]: unknown };
 	// Add other common fields as needed
 }
 
@@ -120,6 +121,10 @@ async function readBodyForTransform(request: Request): Promise<{
  * @param request - The incoming request object to transform
  * @param account - The account containing model_mappings configuration
  * @param providerSpecificMapping - Optional provider-specific mapping function
+ * @param mutateBody - Optional hook run AFTER model mapping (even when the model
+ *   was unchanged) that may mutate the parsed body in place. Return `true` when a
+ *   mutation was applied so the body is re-serialised; `false` (or absent) leaves
+ *   the original bytes forwarded untouched when the model also didn't change.
  * @returns A new Request object with transformed body, or the original if no changes needed
  *
  * @example
@@ -130,6 +135,7 @@ export async function transformRequestBodyModel<T extends TransformRequestBody>(
 	request: Request,
 	account?: Account | undefined,
 	providerSpecificMapping?: (model: string, account?: Account) => string,
+	mutateBody?: (body: T) => boolean,
 ): Promise<Request> {
 	// Only JSON bodies carry a model to map; anything else passes through
 	// untouched (and is left un-consumed so identity is preserved), matching the
@@ -152,6 +158,7 @@ export async function transformRequestBodyModel<T extends TransformRequestBody>(
 	try {
 		const body: T = JSON.parse(new TextDecoder().decode(bytes));
 
+		let modelChanged = false;
 		// Only transform if model field exists
 		if (body.model) {
 			const originalModel = body.model;
@@ -165,11 +172,19 @@ export async function transformRequestBodyModel<T extends TransformRequestBody>(
 				log.debug(
 					`Mapped model in request: ${originalModel} -> ${mappedModel}`,
 				);
-				return rebuild(JSON.stringify(body));
+				modelChanged = true;
 			}
 		}
 
-		// No model change — forward the original bytes untouched.
+		// Run the optional body-mutation hook after the model mapping — it runs
+		// even when the model was unchanged (e.g. to inject an effort override).
+		const bodyMutated = mutateBody ? mutateBody(body) : false;
+
+		// Re-serialise only if the model changed OR the hook mutated the body;
+		// otherwise forward the original bytes untouched.
+		if (modelChanged || bodyMutated) {
+			return rebuild(JSON.stringify(body));
+		}
 		return rebuild(bytes);
 	} catch (error) {
 		log.debug("Failed to transform request body model:", error);
