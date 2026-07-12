@@ -16,6 +16,57 @@ export const KNOWN_PATTERNS = ["opus", "haiku", "sonnet", "fable"] as const;
 export type ModelFamily = "opus" | "sonnet" | "haiku" | "fable";
 
 /**
+ * Suffix Claude Code appends to a model ID to request the 1M-token context
+ * window (e.g. `claude-opus-4-8[1m]`, `claude-fable-5[1m]`).
+ */
+export const CONTEXT_1M_SUFFIX = "[1m]";
+
+/**
+ * The `anthropic-beta` flag that unlocks the 1M-token context window on the
+ * Anthropic API. Claude Code sends this header alongside the base model ID when
+ * it translates a `[1m]` alias itself; the proxy must do the same when it
+ * receives the alias verbatim (see {@link splitContext1mAlias}).
+ */
+export const CONTEXT_1M_BETA = "context-1m-2025-08-07";
+
+/**
+ * Split a Claude Code 1M-context alias into its base model plus a `context1m`
+ * flag.
+ *
+ * Claude Code represents a 1M-context request internally as `<model>[1m]`.
+ * Normally it resolves this itself (base model + the
+ * `anthropic-beta: context-1m-2025-08-07` header), but some requests (notably
+ * warmup POSTs to /v1/messages) carry the alias verbatim in the `model` field.
+ * The Anthropic API does not know the aliased ID and returns a 404
+ * not_found_error, which Claude Code reads as "model unavailable" and downgrades
+ * (to Opus 4.8) WITHOUT the 1M window. Callers use this helper to mirror Claude
+ * Code's own translation: strip the suffix and add the beta flag.
+ *
+ * Behaviour is intentionally strict — a case-sensitive **suffix** match only,
+ * no trimming and no mid-string handling:
+ *   - `"claude-opus-4-8[1m]"` → `{ model: "claude-opus-4-8", context1m: true }`
+ *   - `"claude-opus-4-8"`     → `{ model: "claude-opus-4-8", context1m: false }`
+ *   - `"claude-[1m]-x"`       → unchanged, `context1m: false` (not a suffix)
+ *   - `"[1m]"` / `""`         → unchanged, `context1m: false` (never yield an
+ *                               empty base model)
+ *
+ * @returns the base model and whether the 1M-context suffix was present
+ */
+export function splitContext1mAlias(model: string): {
+	model: string;
+	context1m: boolean;
+} {
+	if (model.endsWith(CONTEXT_1M_SUFFIX)) {
+		const base = model.slice(0, -CONTEXT_1M_SUFFIX.length);
+		// Never produce an empty base model from a bare "[1m]" (or "").
+		if (base.length > 0) {
+			return { model: base, context1m: true };
+		}
+	}
+	return { model, context1m: false };
+}
+
+/**
  * Get the model family (opus/sonnet/haiku/fable) from a model ID
  * Uses the same pattern matching as mapModelName().
  * Mythos-class IDs (e.g. claude-mythos-5) resolve to the "fable" family —

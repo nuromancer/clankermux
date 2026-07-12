@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+	CONTEXT_1M_BETA,
+	CONTEXT_1M_SUFFIX,
 	codexAccountFitsRequest,
 	codexAccountFitsRequestUnmargined,
 	DEFAULT_CODEX_MODEL_BY_FAMILY,
@@ -16,6 +18,7 @@ import {
 	resolveCodexTargetModel,
 	resolveModelContextWindow,
 	SAFETY_MARGIN,
+	splitContext1mAlias,
 } from "@clankermux/core";
 import type { Account, ContextComposition } from "@clankermux/types";
 
@@ -706,5 +709,45 @@ describe("resolveCodexTargetModel", () => {
 		expect(
 			codexAccountFitsRequest(account, "claude-sonnet-4-5", boundary + 1),
 		).toBe(false);
+	});
+});
+
+describe("splitContext1mAlias", () => {
+	test("strips the [1m] suffix and flags context1m for fable/opus aliases", () => {
+		expect(splitContext1mAlias("claude-fable-5[1m]")).toEqual({
+			model: "claude-fable-5",
+			context1m: true,
+		});
+		expect(splitContext1mAlias("claude-opus-4-8[1m]")).toEqual({
+			model: "claude-opus-4-8",
+			context1m: true,
+		});
+	});
+
+	test("leaves a plain model untouched with context1m false", () => {
+		expect(splitContext1mAlias("claude-fable-5")).toEqual({
+			model: "claude-fable-5",
+			context1m: false,
+		});
+	});
+
+	test("does not strip when the result would be empty (bare suffix / empty string)", () => {
+		expect(splitContext1mAlias("[1m]")).toEqual({
+			model: "[1m]",
+			context1m: false,
+		});
+		expect(splitContext1mAlias("")).toEqual({ model: "", context1m: false });
+	});
+
+	test("does not strip a mid-string [1m] occurrence", () => {
+		expect(splitContext1mAlias("claude-[1m]-x")).toEqual({
+			model: "claude-[1m]-x",
+			context1m: false,
+		});
+	});
+
+	test("exposes the suffix and beta-flag constants", () => {
+		expect(CONTEXT_1M_SUFFIX).toBe("[1m]");
+		expect(CONTEXT_1M_BETA).toBe("context-1m-2025-08-07");
 	});
 });
