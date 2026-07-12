@@ -1,6 +1,7 @@
 import {
 	BUFFER_SIZES,
 	CONTEXT_1M_BETA,
+	getModelFamily,
 	isInvalidGrantMessage,
 	mapModelName,
 	OAuthRefreshTokenError,
@@ -301,12 +302,37 @@ export class AnthropicProvider extends BaseProvider {
 	 * downgrades (to Opus 4.8) WITHOUT the 1M context window. We mirror Claude
 	 * Code's own translation: strip the `[1m]` suffix from the body model and add
 	 * the context-1m beta flag to `anthropic-beta`.
+	 *
+	 * Security-fallback effort bump: Claude Code forces Fable-5 sessions onto
+	 * Opus 4.8 whenever it detects a security-sensitive topic. The `[1m]`
+	 * translation above keeps those forced requests on the 1M-context window; on
+	 * top of that we raise `output_config.effort` to `"max"` so the (weaker,
+	 * forced) Opus 4.8 model compensates with maximum reasoning depth. Opus 4.8
+	 * supports `output_config.effort` across low–max. The bump fires only for
+	 * Opus-family requests that also want the 1M window — signalled either by the
+	 * verbatim `[1m]` alias in the body model OR by the incoming request already
+	 * carrying `context-1m-2025-08-07` in its `anthropic-beta` header (Claude Code
+	 * resolves the alias itself for normal requests and sends plain model + beta
+	 * flag; only warmup POSTs carry the alias verbatim). Fable/Sonnet/Haiku `[1m]`
+	 * requests are never effort-bumped.
 	 */
 	async transformRequestBody(
 		request: Request,
 		account?: Account,
 	): Promise<Request> {
+		// The incoming request may already advertise the 1M window via its
+		// anthropic-beta header (the normal, non-warmup path where Claude Code
+		// resolved the [1m] alias itself). Capture this before the body is
+		// consumed; the header is left untouched by transformRequestBodyModel.
+		const incomingBeta = request.headers.get("anthropic-beta");
+		const headerWants1m =
+			incomingBeta
+				?.split(",")
+				.map((s) => s.trim())
+				.includes(CONTEXT_1M_BETA) ?? false;
+
 		let wants1m = false;
+		let baseModelFamily: ReturnType<typeof getModelFamily> = null;
 		const transformed = await transformRequestBodyModel(
 			request,
 			account,
@@ -315,7 +341,33 @@ export class AnthropicProvider extends BaseProvider {
 				if (split.context1m) {
 					wants1m = true;
 				}
+				// Family of the base model AFTER the [1m] split but BEFORE any
+				// account mapping — the effort bump keys off the requested Claude
+				// family, not the upstream target it maps to.
+				baseModelFamily = getModelFamily(split.model);
 				return acc ? mapModelName(split.model, acc) : split.model;
+			},
+			(body) => {
+				// Effort bump: only for Opus-family requests that want the 1M window
+				// (alias in body OR context-1m already in the incoming beta header).
+				const wants1mContext = wants1m || headerWants1m;
+				if (!wants1mContext || baseModelFamily !== "opus") {
+					return false;
+				}
+				const currentEffort = body.output_config?.effort;
+				if (currentEffort === "max") {
+					return false;
+				}
+				body.output_config = {
+					...(body.output_config ?? {}),
+					effort: "max",
+				};
+				log.info(
+					`Security-fallback effort bump: ${body.model} effort ${
+						currentEffort ?? "unset"
+					} -> max`,
+				);
+				return true;
 			},
 		);
 

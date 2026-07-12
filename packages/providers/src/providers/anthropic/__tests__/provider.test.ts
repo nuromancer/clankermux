@@ -373,6 +373,102 @@ describe("AnthropicProvider", () => {
 		});
 	});
 
+	describe("transformRequestBody: security-fallback effort bump", () => {
+		function makeRequest(
+			bodyObj: Record<string, unknown>,
+			extraHeaders: Record<string, string> = {},
+		): Request {
+			return new Request("https://api.anthropic.com/v1/messages", {
+				method: "POST",
+				body: JSON.stringify(bodyObj),
+				headers: { "Content-Type": "application/json", ...extraHeaders },
+			});
+		}
+
+		it("bumps effort to max and translates [1m] for an opus[1m] request", async () => {
+			const request = makeRequest({
+				model: "claude-opus-4-8[1m]",
+				max_tokens: 100,
+			});
+			const result = await provider.transformRequestBody(request, undefined);
+			const body = await result.json();
+
+			expect(body.model).toBe("claude-opus-4-8");
+			expect(body.output_config).toEqual({ effort: "max" });
+			expect(result.headers.get("anthropic-beta")).toBe(
+				"context-1m-2025-08-07",
+			);
+		});
+
+		it("bumps effort to max for a plain opus request carrying the context-1m beta header", async () => {
+			const request = makeRequest(
+				{ model: "claude-opus-4-8", max_tokens: 100 },
+				{ "anthropic-beta": "context-1m-2025-08-07" },
+			);
+			const result = await provider.transformRequestBody(request, undefined);
+			const body = await result.json();
+
+			expect(body.model).toBe("claude-opus-4-8");
+			expect(body.output_config).toEqual({ effort: "max" });
+		});
+
+		it("leaves a plain opus request with no 1m signal untouched (no output_config injected)", async () => {
+			const request = makeRequest({
+				model: "claude-opus-4-8",
+				max_tokens: 100,
+			});
+			const result = await provider.transformRequestBody(request, undefined);
+			const body = await result.json();
+
+			expect(body.model).toBe("claude-opus-4-8");
+			expect(body.output_config).toBeUndefined();
+			expect(result.headers.get("anthropic-beta")).toBeNull();
+		});
+
+		it("does NOT bump effort for a fable[1m] request (only translates [1m])", async () => {
+			const request = makeRequest({
+				model: "claude-fable-5[1m]",
+				max_tokens: 100,
+			});
+			const result = await provider.transformRequestBody(request, undefined);
+			const body = await result.json();
+
+			expect(body.model).toBe("claude-fable-5");
+			expect(body.output_config).toBeUndefined();
+			expect(result.headers.get("anthropic-beta")).toBe(
+				"context-1m-2025-08-07",
+			);
+		});
+
+		it("preserves other output_config fields while raising effort to max", async () => {
+			const request = makeRequest({
+				model: "claude-opus-4-8[1m]",
+				max_tokens: 100,
+				output_config: { effort: "high", format: { type: "json" } },
+			});
+			const result = await provider.transformRequestBody(request, undefined);
+			const body = await result.json();
+
+			expect(body.output_config).toEqual({
+				effort: "max",
+				format: { type: "json" },
+			});
+		});
+
+		it("is a no-op when effort is already max", async () => {
+			const request = makeRequest({
+				model: "claude-opus-4-8[1m]",
+				max_tokens: 100,
+				output_config: { effort: "max" },
+			});
+			const result = await provider.transformRequestBody(request, undefined);
+			const body = await result.json();
+
+			expect(body.model).toBe("claude-opus-4-8");
+			expect(body.output_config).toEqual({ effort: "max" });
+		});
+	});
+
 	describe("refreshToken", () => {
 		const origFetch = globalThis.fetch;
 

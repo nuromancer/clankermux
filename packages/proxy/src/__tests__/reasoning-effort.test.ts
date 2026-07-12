@@ -95,4 +95,44 @@ describe("parseReasoningEffort", () => {
 			}),
 		).toBe("thinking:1024");
 	});
+
+	describe("anthropic output_config.effort", () => {
+		it("returns the effort string as-is", () => {
+			expect(parseReasoningEffort({ output_config: { effort: "xhigh" } })).toBe(
+				"xhigh",
+			);
+			expect(parseReasoningEffort({ output_config: { effort: "max" } })).toBe(
+				"max",
+			);
+		});
+
+		it("takes priority over thinking and reasoning", () => {
+			expect(
+				parseReasoningEffort({
+					output_config: { effort: "max" },
+					thinking: { type: "enabled", budget_tokens: 1024 },
+					reasoning: { effort: "high" },
+				}),
+			).toBe("max");
+		});
+
+		it("falls through to existing logic on an empty effort string", () => {
+			expect(
+				parseReasoningEffort({
+					output_config: { effort: "" },
+					thinking: { type: "enabled", budget_tokens: 2048 },
+				}),
+			).toBe("thinking:2048");
+			expect(
+				parseReasoningEffort({ output_config: { effort: "" } }),
+			).toBeNull();
+		});
+
+		it("falls through when effort is missing or non-string", () => {
+			expect(
+				parseReasoningEffort({ output_config: { format: {} } }),
+			).toBeNull();
+			expect(parseReasoningEffort({ output_config: { effort: 3 } })).toBeNull();
+		});
+	});
 });

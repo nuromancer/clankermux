@@ -2,6 +2,10 @@
  * Extract the per-request "reasoning effort" from a parsed request body.
  *
  * Storage representation (single TEXT value, null when absent):
+ *   - Anthropic `output_config: { effort: "<string>" }` → the raw effort string
+ *     as-is. This is what Claude Code actually sends for Anthropic requests
+ *     (low/medium/high/xhigh/max), so it is checked FIRST — without it the
+ *     `reasoning_effort` column stayed NULL for every Fable/Opus request.
  *   - Anthropic `thinking: { type: "enabled", budget_tokens: N }` →
  *     `"thinking:<N>"`, or bare `"thinking"` when enabled without a numeric
  *     budget. `type: "disabled"` → null.
@@ -13,6 +17,14 @@ export function parseReasoningEffort(body: unknown): string | null {
 		return null;
 	}
 	const record = body as Record<string, unknown>;
+
+	const outputConfig = record.output_config;
+	if (typeof outputConfig === "object" && outputConfig !== null) {
+		const effort = (outputConfig as Record<string, unknown>).effort;
+		if (typeof effort === "string" && effort.length > 0) {
+			return effort;
+		}
+	}
 
 	const thinking = record.thinking;
 	if (typeof thinking === "object" && thinking !== null) {
