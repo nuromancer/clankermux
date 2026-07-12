@@ -193,6 +193,7 @@
       "dependencies": {
         "@clankermux/core": "workspace:*",
         "@clankermux/openai-formats": "workspace:*",
+        "@clankermux/types": "workspace:*",
       },
     },
     "packages/proxy": {
@@ -204,6 +205,7 @@
         "@clankermux/database": "workspace:*",
         "@clankermux/logger": "workspace:*",
         "@clankermux/providers": "workspace:*",
+        "@clankermux/types": "workspace:*",
         "@clankermux/ui-common": "workspace:*",
       },
     },
