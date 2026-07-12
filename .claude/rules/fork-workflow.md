@@ -149,4 +149,5 @@ Want a specific upstream fix?
 
 - `CLAUDE.md` — general repo rules, lint/typecheck/format, file exclusions, commit prefixes.
 - `.claude/rules/main-checkout-safety.md` — why branch/merge happens in a worktree, not the live checkout.
+- `docs/upstream-divergence.md` — divergence ledger: our fork-only fixes vs. upstream's parallel fixes, open cherry-pick candidates, and known divergence points. Update it after each upstream review.
 - Memory `project_rebaseline_strategy` — the cherry-pick-not-re-baseline decision and why (permanent provider removal).
