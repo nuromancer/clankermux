@@ -1,8 +1,10 @@
 import {
 	BUFFER_SIZES,
+	CONTEXT_1M_BETA,
 	isInvalidGrantMessage,
 	mapModelName,
 	OAuthRefreshTokenError,
+	splitContext1mAlias,
 	validateEndpointUrl,
 } from "@clankermux/core";
 import { sanitizeProxyHeaders } from "@clankermux/http-common";
@@ -286,16 +288,62 @@ export class AnthropicProvider extends BaseProvider {
 		};
 	}
 
+	/**
+	 * Transform the request body model for the Anthropic boundary.
+	 *
+	 * In addition to the usual account model mapping, this translates Claude
+	 * Code's internal 1M-context aliases (`<model>[1m]`, e.g. `claude-fable-5[1m]`,
+	 * `claude-opus-4-8[1m]`). Claude Code normally resolves these itself (base
+	 * model + the `anthropic-beta: context-1m-2025-08-07` flag), but some requests
+	 * (notably warmup POSTs to /v1/messages) carry the alias verbatim in the
+	 * `model` field. The Anthropic API does not know the aliased ID and returns a
+	 * 404 not_found_error, which Claude Code reads as "model unavailable" and
+	 * downgrades (to Opus 4.8) WITHOUT the 1M context window. We mirror Claude
+	 * Code's own translation: strip the `[1m]` suffix from the body model and add
+	 * the context-1m beta flag to `anthropic-beta`.
+	 */
 	async transformRequestBody(
 		request: Request,
 		account?: Account,
 	): Promise<Request> {
-		return transformRequestBodyModel(request, account, (model, acc) => {
-			if (acc) {
-				return mapModelName(model, acc);
+		let wants1m = false;
+		const transformed = await transformRequestBodyModel(
+			request,
+			account,
+			(model, acc) => {
+				const split = splitContext1mAlias(model);
+				if (split.context1m) {
+					wants1m = true;
+				}
+				return acc ? mapModelName(split.model, acc) : split.model;
+			},
+		);
+
+		if (!wants1m) {
+			return transformed;
+		}
+
+		// Add (dedupe) the context-1m beta flag: extend an existing anthropic-beta
+		// header, otherwise set it.
+		const headers = new Headers(transformed.headers);
+		const beta = headers.get("anthropic-beta");
+		if (beta) {
+			const present = beta.split(",").map((s) => s.trim());
+			if (!present.includes(CONTEXT_1M_BETA)) {
+				headers.set("anthropic-beta", `${beta},${CONTEXT_1M_BETA}`);
 			}
-			return model;
-		});
+		} else {
+			headers.set("anthropic-beta", CONTEXT_1M_BETA);
+		}
+
+		// No clone(): transformRequestBodyModel already rebuilt the Request from
+		// raw bytes, so its body stream is fresh — forward it directly.
+		return new Request(transformed.url, {
+			method: transformed.method,
+			headers,
+			body: transformed.body,
+			duplex: "half",
+		} as RequestInit & { duplex?: "half" });
 	}
 
 	buildUrl(path: string, query: string, account?: Account): string {

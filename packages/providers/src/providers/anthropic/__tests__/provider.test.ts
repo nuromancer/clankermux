@@ -299,6 +299,80 @@ describe("AnthropicProvider", () => {
 		});
 	});
 
+	describe("transformRequestBody: Claude Code [1m] alias translation", () => {
+		function makeRequestWithHeaders(
+			model: string,
+			extraHeaders: Record<string, string> = {},
+		): Request {
+			return new Request("https://api.anthropic.com/v1/messages", {
+				method: "POST",
+				body: JSON.stringify({ model, max_tokens: 100 }),
+				headers: { "Content-Type": "application/json", ...extraHeaders },
+			});
+		}
+
+		it("strips the [1m] suffix and sets the context-1m beta header when none exists", async () => {
+			const request = makeRequestWithHeaders("claude-fable-5[1m]");
+			const result = await provider.transformRequestBody(request, undefined);
+			const body = await result.json();
+
+			expect(body.model).toBe("claude-fable-5");
+			expect(result.headers.get("anthropic-beta")).toBe(
+				"context-1m-2025-08-07",
+			);
+		});
+
+		it("appends context-1m to an existing anthropic-beta header, preserving the prior value", async () => {
+			const request = makeRequestWithHeaders("claude-fable-5[1m]", {
+				"anthropic-beta": "oauth-2025-04-20",
+			});
+			const result = await provider.transformRequestBody(request, undefined);
+			const body = await result.json();
+
+			expect(body.model).toBe("claude-fable-5");
+			expect(result.headers.get("anthropic-beta")).toBe(
+				"oauth-2025-04-20,context-1m-2025-08-07",
+			);
+		});
+
+		it("does not duplicate context-1m when the beta header already carries it", async () => {
+			const request = makeRequestWithHeaders("claude-opus-4-8[1m]", {
+				"anthropic-beta": "oauth-2025-04-20,context-1m-2025-08-07",
+			});
+			const result = await provider.transformRequestBody(request, undefined);
+			const body = await result.json();
+
+			expect(body.model).toBe("claude-opus-4-8");
+			expect(result.headers.get("anthropic-beta")).toBe(
+				"oauth-2025-04-20,context-1m-2025-08-07",
+			);
+		});
+
+		it("leaves the model and headers untouched for a non-[1m] model", async () => {
+			const request = makeRequestWithHeaders("claude-opus-4-8");
+			const result = await provider.transformRequestBody(request, undefined);
+			const body = await result.json();
+
+			expect(body.model).toBe("claude-opus-4-8");
+			expect(result.headers.get("anthropic-beta")).toBeNull();
+		});
+
+		it("applies the account mapping to the stripped model and still sets the beta header", async () => {
+			const account = {
+				...mockAccount,
+				model_mappings: JSON.stringify({ fable: "claude-fable-5" }),
+			};
+			const request = makeRequestWithHeaders("claude-fable-5[1m]");
+			const result = await provider.transformRequestBody(request, account);
+			const body = await result.json();
+
+			expect(body.model).toBe("claude-fable-5");
+			expect(result.headers.get("anthropic-beta")).toBe(
+				"context-1m-2025-08-07",
+			);
+		});
+	});
+
 	describe("refreshToken", () => {
 		const origFetch = globalThis.fetch;
 
