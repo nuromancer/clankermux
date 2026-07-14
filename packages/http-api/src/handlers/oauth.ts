@@ -24,7 +24,10 @@ import {
 	initiateDeviceFlow as initiateQwenDeviceFlow,
 	pollForToken as pollQwenForToken,
 } from "@clankermux/providers/qwen";
-import { clearAccountRefreshCache } from "@clankermux/proxy";
+import {
+	clearAccountRefreshCache,
+	restartUsagePollingForAccount,
+} from "@clankermux/proxy";
 
 const log = new Logger("OAuthHandler");
 
@@ -762,6 +765,17 @@ export function createAnthropicReauthCallbackHandler(
 				// (completeReauth already lifted any oauth_invalid_grant pause).
 				clearAccountRefreshCache(account.id);
 
+				// Polling may have been stopped for this account (terminal refresh
+				// failure while paused); the fresh tokens are the moment to restart
+				// it. Best-effort: never fail the reauth response over polling.
+				try {
+					await restartUsagePollingForAccount(account.id);
+				} catch (pollingError) {
+					log.warn(
+						`Failed to restart usage polling after reauth for '${name}': ${pollingError}`,
+					);
+				}
+
 				log.info(`Successfully re-authenticated Anthropic account '${name}'`);
 
 				return jsonResponse({
@@ -976,7 +990,7 @@ export function createOAuthCallbackHandler(dbOps: DatabaseOperations) {
 					`Completing OAuth flow for account '${name}' in ${savedMode} mode`,
 				);
 
-				await oauthFlow.complete(
+				const created = await oauthFlow.complete(
 					{
 						sessionId,
 						code,
@@ -991,6 +1005,26 @@ export function createOAuthCallbackHandler(dbOps: DatabaseOperations) {
 				dbOps.deleteOAuthSession(sessionId);
 
 				log.info(`Successfully added account '${name}' via OAuth`);
+
+				// Usage polling only starts at server boot for accounts that exist
+				// then; an account added at runtime would show no 5h/weekly usage
+				// until the next restart. Best-effort: a polling failure must not
+				// fail the add itself. Console/API-key accounts have no OAuth
+				// tokens to poll with, so only oauth-type accounts are started.
+				if (created.authType === "oauth") {
+					try {
+						const pollingStarted = await restartUsagePollingForAccount(
+							created.id,
+						);
+						log.info(
+							`Usage polling for new account '${name}': ${pollingStarted ? "started" : "not started (no restarter available)"}`,
+						);
+					} catch (pollingError) {
+						log.warn(
+							`Failed to start usage polling for new account '${name}': ${pollingError}`,
+						);
+					}
+				}
 
 				return jsonResponse({
 					success: true,
