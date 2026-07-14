@@ -900,7 +900,7 @@ export function createAccountAddHandler(
 				maxLength: 100,
 				pattern: patterns.accountName,
 				patternErrorMessage:
-					"can only contain letters, numbers, spaces, hyphens, underscores, and dots",
+					"can only contain letters, numbers, spaces, hyphens, underscores, dots, and at signs",
 				transform: sanitizers.trim,
 			});
 
@@ -1265,7 +1265,7 @@ export function createAccountRenameHandler(dbOps: DatabaseOperations) {
 				maxLength: 100,
 				pattern: patterns.accountName,
 				patternErrorMessage:
-					"can only contain letters, numbers, spaces, hyphens, underscores, and dots",
+					"can only contain letters, numbers, spaces, hyphens, underscores, dots, and at signs",
 				transform: sanitizers.trim,
 			});
 
@@ -1328,7 +1328,7 @@ export function createZaiAccountAddHandler(dbOps: DatabaseOperations) {
 				maxLength: 100,
 				pattern: patterns.accountName,
 				patternErrorMessage:
-					"can only contain letters, numbers, spaces, hyphens, underscores, and dots",
+					"can only contain letters, numbers, spaces, hyphens, underscores, dots, and at signs",
 				transform: sanitizers.trim,
 			});
 
@@ -1492,7 +1492,7 @@ export function createOpenAIAccountAddHandler(dbOps: DatabaseOperations) {
 				maxLength: 100,
 				pattern: patterns.accountName,
 				patternErrorMessage:
-					"can only contain letters, numbers, spaces, hyphens, underscores, and dots",
+					"can only contain letters, numbers, spaces, hyphens, underscores, dots, and at signs",
 				transform: sanitizers.trim,
 			});
 
@@ -1652,7 +1652,7 @@ export function createMinimaxAccountAddHandler(dbOps: DatabaseOperations) {
 				maxLength: 100,
 				pattern: patterns.accountName,
 				patternErrorMessage:
-					"can only contain letters, numbers, spaces, hyphens, underscores, and dots",
+					"can only contain letters, numbers, spaces, hyphens, underscores, dots, and at signs",
 				transform: sanitizers.trim,
 			});
 
@@ -1786,7 +1786,7 @@ export function createAnthropicCompatibleAccountAddHandler(
 				maxLength: 100,
 				pattern: patterns.accountName,
 				patternErrorMessage:
-					"can only contain letters, numbers, spaces, hyphens, underscores, and dots",
+					"can only contain letters, numbers, spaces, hyphens, underscores, dots, and at signs",
 				transform: sanitizers.trim,
 			});
 
@@ -1948,7 +1948,7 @@ export function createOllamaAccountAddHandler(dbOps: DatabaseOperations) {
 				maxLength: 100,
 				pattern: patterns.accountName,
 				patternErrorMessage:
-					"can only contain letters, numbers, spaces, hyphens, underscores, and dots",
+					"can only contain letters, numbers, spaces, hyphens, underscores, dots, and at signs",
 				transform: sanitizers.trim,
 			});
 
@@ -2094,7 +2094,7 @@ export function createOllamaCloudAccountAddHandler(dbOps: DatabaseOperations) {
 				maxLength: 100,
 				pattern: patterns.accountName,
 				patternErrorMessage:
-					"can only contain letters, numbers, spaces, hyphens, underscores, and dots",
+					"can only contain letters, numbers, spaces, hyphens, underscores, dots, and at signs",
 				transform: sanitizers.trim,
 			});
 
@@ -3093,7 +3093,7 @@ export function createKiloAccountAddHandler(dbOps: DatabaseOperations) {
 				maxLength: 100,
 				pattern: patterns.accountName,
 				patternErrorMessage:
-					"can only contain letters, numbers, spaces, hyphens, underscores, and dots",
+					"can only contain letters, numbers, spaces, hyphens, underscores, dots, and at signs",
 				transform: sanitizers.trim,
 			});
 
@@ -3245,7 +3245,7 @@ export function createAlibabaCodingPlanAccountAddHandler(
 				maxLength: 100,
 				pattern: patterns.accountName,
 				patternErrorMessage:
-					"can only contain letters, numbers, spaces, hyphens, underscores, and dots",
+					"can only contain letters, numbers, spaces, hyphens, underscores, dots, and at signs",
 				transform: sanitizers.trim,
 			});
 
@@ -3392,7 +3392,7 @@ export function createOpenRouterAccountAddHandler(dbOps: DatabaseOperations) {
 				maxLength: 100,
 				pattern: patterns.accountName,
 				patternErrorMessage:
-					"can only contain letters, numbers, spaces, hyphens, underscores, and dots",
+					"can only contain letters, numbers, spaces, hyphens, underscores, dots, and at signs",
 				transform: sanitizers.trim,
 			});
 

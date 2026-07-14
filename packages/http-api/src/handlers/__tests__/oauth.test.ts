@@ -166,6 +166,41 @@ describe("OAuth Handler - Backward Compatibility", () => {
 			expect(data.error).toContain("name");
 		});
 
+		it("should accept an email address as the account name", async () => {
+			const request = new Request("http://localhost/api/oauth/init", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "freelance@aronbinienda.de",
+					mode: "claude-oauth",
+					priority: 0,
+				}),
+			});
+
+			const response = await handler(request);
+			const data = await response.json();
+
+			expect(response.status).toBe(200);
+			expect(data.success).toBe(true);
+			expect(data.authUrl).toBeDefined();
+		});
+
+		it("should continue rejecting URL delimiters in account names", async () => {
+			const request = new Request("http://localhost/api/oauth/init", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "freelance/aron@binienda.de",
+					mode: "claude-oauth",
+					priority: 0,
+				}),
+			});
+
+			const response = await handler(request);
+
+			expect(response.status).toBe(400);
+		});
+
 		it("should accept custom endpoint", async () => {
 			const request = new Request("http://localhost/api/oauth/init", {
 				method: "POST",
